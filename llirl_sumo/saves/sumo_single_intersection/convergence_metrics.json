@@ -1,0 +1,10 @@
+{
+  "likelihood_convergence": [],
+  "posterior_stability": [],
+  "cluster_stability": [
+    true,
+    true,
+    true,
+    true
+  ]
+}
