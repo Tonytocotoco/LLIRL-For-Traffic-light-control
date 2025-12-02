@@ -22,7 +22,7 @@ import gym
 gym.register(
     'SUMO-SingleIntersection-v1',
     entry_point='myrllib.envs.sumo_env:SUMOEnv',
-    max_episode_steps=3600  # 1 giờ = 3600 giây
+    max_episode_steps=7200  # 4 giờ = 14400 giây
 )
 
 from myrllib.policies import NormalMLPPolicy
@@ -34,7 +34,7 @@ start_time = time.time()
 ######################## Arguments ############################################
 parser = argparse.ArgumentParser()
 parser.add_argument('--sumo_config', type=str, 
-        default='../nets/single-intersection/run_morning_6to10.sumocfg',
+        default='../nets/train-intersection/run_120p4k.sumocfg',
         help='path to SUMO configuration file')
 parser.add_argument('--output', type=str, default='output/sumo_single_intersection',
         help='output folder for saving results')
@@ -48,7 +48,7 @@ parser.add_argument('--num_layers', type=int, default=2,
         help='number of hidden layers')
 parser.add_argument('--num_iter', type=int, default=50,
         help='number of policy iterations per period')
-parser.add_argument('--num_periods', type=int, default=30,
+parser.add_argument('--num_periods', type=int, default=10,
         help='number of environment changes')
 parser.add_argument('--lr', type=float, default=3e-4,
         help='learning rate')
@@ -85,12 +85,19 @@ sampler = BatchSampler(env_name, args.batch_size, num_workers=num_workers, seed=
                       sumo_config_path=sumo_config_path)
 
 # Handle num_workers=0 case (single env)
-if hasattr(sampler, 'envs') and sampler.envs is not None:
-    state_dim = int(np.prod(sampler.envs[0].observation_space.shape))
-    action_dim = int(np.prod(sampler.envs[0].action_space.shape))
+# Lấy env gốc từ sampler nếu có attribute _env
+if hasattr(sampler, '_env'):
+    env_for_dim = sampler._env
+# Nếu sampler là DummyVecEnv hoặc SubprocVecEnv
+elif hasattr(sampler, 'envs') and sampler.envs is not None:
+    env_for_dim = sampler.envs[0]
+# Nếu không, bạn cần cung cấp env gốc trực tiếp
 else:
-    state_dim = int(np.prod(sampler._env.observation_space.shape))
-    action_dim = int(np.prod(sampler._env.action_space.shape))
+    raise ValueError("Cannot determine environment for state/action dimensions.")
+
+state_dim = int(np.prod(env_for_dim.observation_space.shape))
+action_dim = int(np.prod(env_for_dim.action_space.shape))
+
 print(f'State dim: {state_dim}; Action dim: {action_dim}')
 
 # Generate tasks

@@ -22,7 +22,7 @@ class SUMOEnv(gym.Env):
     """
     SUMO Environment for traffic light control at single intersection
     """
-    def __init__(self, sumo_config_path, max_steps=3600, yellow_time=3, green_time_min=10, green_time_max=60):
+    def __init__(self, sumo_config_path, max_steps=7200, yellow_time=3, green_time_min=10, green_time_max=60):
         super(SUMOEnv, self).__init__()
         
         self.sumo_config_path = sumo_config_path
@@ -242,10 +242,33 @@ class SUMOEnv(gym.Env):
         # Done if max steps reached
         done = self.step_count >= self.max_steps
         
+        controlled_lanes = traci.trafficlight.getControlledLanes(self.tl_id)
+
+        total_waiting = 0
+        total_queue = 0
+        total_vehicle = 0
+        total_speed = 0
+        count_speed = 0
+
+        for lane_id in controlled_lanes:
+            total_waiting += traci.lane.getWaitingTime(lane_id)
+            total_queue += traci.lane.getLastStepHaltingNumber(lane_id)
+            total_vehicle += traci.lane.getLastStepVehicleNumber(lane_id)
+            speed = traci.lane.getLastStepMeanSpeed(lane_id)
+            if speed >= 0:  # avoid invalid
+                total_speed += speed
+                count_speed += 1
+
+        avg_speed = total_speed / count_speed if count_speed > 0 else 0.0
+
         info = {
             'step_count': self.step_count,
             'phase': current_phase,
-            'phase_duration': phase_duration
+            'phase_duration': phase_duration,
+            'waiting_time': total_waiting,
+            'queue_length': total_queue,
+            'vehicle_count': total_vehicle,
+            'speed': avg_speed
         }
         
         # Gym new API: return (obs, reward, terminated, truncated, info)

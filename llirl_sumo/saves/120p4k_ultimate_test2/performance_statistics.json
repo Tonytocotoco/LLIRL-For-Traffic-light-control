@@ -1,0 +1,18 @@
+{
+  "overall_mean_reward": -16372.418310546875,
+  "overall_std_reward": 19359.70402732201,
+  "overall_max_reward": -356.4715576171875,
+  "overall_min_reward": -42204.265625,
+  "final_period_mean": -356.4715576171875,
+  "best_period_mean": -356.4715576171875,
+  "worst_period_mean": -42204.265625,
+  "learning_trajectory": {
+    "early_periods_mean": -661.8946533203125,
+    "middle_periods_mean": -19319.729858398438,
+    "late_periods_mean": -21280.368591308594
+  },
+  "consistency": {
+    "period_std_mean": 0.0,
+    "iteration_std_mean": 19359.704027322012
+  }
+}

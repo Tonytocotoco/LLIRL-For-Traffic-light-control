@@ -642,12 +642,37 @@ class SUMOEnv(gym.Env):
             except:
                 pass  # Nếu có lỗi, tiếp tục bình thường
         
+     # --- collect metrics for evaluation ---
+        controlled_lanes = traci.trafficlight.getControlledLanes(self.tl_id)
+
+        total_waiting = 0
+        total_queue = 0
+        total_vehicle = 0
+        total_speed = 0
+        count_speed = 0
+
+        for lane_id in controlled_lanes:
+            total_waiting += traci.lane.getWaitingTime(lane_id)
+            total_queue += traci.lane.getLastStepHaltingNumber(lane_id)
+            total_vehicle += traci.lane.getLastStepVehicleNumber(lane_id)
+            speed = traci.lane.getLastStepMeanSpeed(lane_id)
+            if speed >= 0:  # avoid invalid
+                total_speed += speed
+                count_speed += 1
+
+        avg_speed = total_speed / count_speed if count_speed > 0 else 0.0
+
         info = {
             'step_count': self.step_count,
             'phase': current_phase,
             'phase_duration': phase_duration,
-            'early_termination': early_terminated
+            'waiting_time': total_waiting,
+            'queue_length': total_queue,
+            'vehicle_count': total_vehicle,
+            'speed': avg_speed
         }
+
+        
         if early_terminated:
             info['termination_reason'] = 'congestion'
         

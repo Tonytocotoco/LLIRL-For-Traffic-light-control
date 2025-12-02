@@ -1,5 +1,5 @@
 """
-Train LLIRL với TẤT CẢ optimizations để đảm bảo vượt DDQN
+Train LLIRL với TẤT CẢ optimizations (VERSION CLEAN – NO PERFORMANCE POLICY)
 Ultimate LLIRL training with all advanced improvements
 """
 
@@ -13,18 +13,18 @@ if __name__ == "__main__":
     
     # Environment configuration
     sumo_config = "../nets/120p4k/run_120p4k.sumocfg"
-    model_path = "saves/120p4k_ultimate_test1"
-    output_path = "output/120p4k_ultimate_test1"
+    model_path = "saves/120p4k_ultimate_test2"
+    output_path = "output/120p4k_ultimate_test2"
     
     print("=" * 80)
-    print("LLIRL ULTIMATE TRAINING")
+    print("LLIRL ULTIMATE TRAINING (CLEAN VERSION – NO PERFORMANCE POLICY)")
     print("=" * 80)
     print(f"SUMO Config: {sumo_config}")
     print(f"Model Path: {model_path}")
     print(f"Output Path: {output_path}")
     print("=" * 80)
     
-    # Step 1: Environment Clustering với parameters tối ưu nhất
+    # Step 1: Environment Clustering
     print("\n" + "=" * 80)
     print("Step 1: Environment Clustering (ULTIMATE)")
     print("=" * 80)
@@ -37,36 +37,37 @@ if __name__ == "__main__":
         "--num_periods", "10",
         "--device", "cuda",
         "--seed", "1009",
-        "--batch_size", "8",
+        "--batch_size", "16",
         "--env_num_layers", "3",
         "--env_hidden_size", "256",
         "--H", "4",
         "--max_steps", "7200",
-        "--zeta", "0.8",
+        "--zeta", "1",
         "--sigma", "0.25",
         "--tau1", "0.5",
         "--tau2", "0.5",
-        "--em_steps", "5"
+        "--em_steps", "10"
     ]
     
     subprocess.run(clustering_cmd, cwd=llirl_dir, check=True)
     
-    # Step 2: Policy Training với TẤT CẢ optimizations
+    # Step 2: Policy Training
     print("\n" + "=" * 80)
-    print("Step 2: Policy Training (ULTIMATE with PPO)")
+    print("Step 2: Policy Training (ULTIMATE with PPO – CLEAN VERSION)")
     print("=" * 80)
     print("Optimizations:")
     print("  - Algorithm: PPO (ổn định)")
-    print("  - Learning rate: 1e-3 (ổn định)")
-    print("  - num_iter: 150 (NHIỀU HƠN - từ 100 → 150)")
-    print("  - batch_size: 16 (NHIỀU HƠN - từ 8 → 16)")
-    print("  - Baseline: linear (giảm variance)")
+    print("  - Learning rate: 1e-3")
+    print("  - num_iter: 5 (demo, có thể tăng lên 150)")
+    print("  - batch_size: 16")
+    print("  - Baseline: linear")
     print("  - Gradient clipping: 0.5")
     print("  - Learning rate decay: 0.95")
-    print("  - policy_eval_weight: 0.7 (ưu tiên performance)")
-    print("  - num_test_episodes: 5 (đánh giá chính xác)")
-    print("  - PPO clip: 0.2, epochs: 5")
+    print("  - general policy enabled (for new clusters)")
+    print("  - Transfer learning from DDQN enabled")
     print("=" * 80)
+    
+
     
     policy_cmd = [
         sys.executable, "policy_training.py",
@@ -76,16 +77,14 @@ if __name__ == "__main__":
         "--algorithm", "ppo",
         "--opt", "adam",
         "--lr", "1e-3",
-        "--num_iter", "10",  # TĂNG từ 100 → 150
+        "--num_iter", "10",
         "--num_periods", "5",
         "--device", "cuda",
         "--seed", "1009",
-        "--batch_size", "16",  # TĂNG từ 8 → 16
+        "--batch_size", "16",
         "--hidden_size", "200",
         "--num_layers", "2",
         "--use_general_policy",
-        "--num_test_episodes", "5",
-        "--policy_eval_weight", "0.4",
         "--max_steps", "7200",
         "--use_baseline",
         "--baseline", "linear",
@@ -94,37 +93,14 @@ if __name__ == "__main__":
         "--early_stop_patience", "10",
         "--early_stop_threshold", "0.01",
         "--grad_clip", "0.5",
-        "--clip", "0.2",
-        "--epochs", "5",
-        "--tau", "1.0",
-        "--ddqn_init_path", "ddqn_sumo/output/120p4k/ddqn_model_final.pth"  # Transfer learning từ DDQN
+        "--ddqn_init_path", "ddqn_sumo/output/120p4k/ddqn_model_final.pth"
     ]
     
     subprocess.run(policy_cmd, cwd=llirl_dir, check=True)
     
     print("\n" + "=" * 80)
-    print("LLIRL ULTIMATE TRAINING COMPLETED!")
+    print("LLIRL ULTIMATE TRAINING COMPLETED (CLEAN VERSION – NO PERFORMANCE POLICY)!")
     print("=" * 80)
     print(f"\nResults saved to:")
     print(f"  - Models: {llirl_dir}/{model_path}/")
     print(f"  - Output: {llirl_dir}/{output_path}/")
-    print("\nKey Improvements:")
-    print("  ✓ Tăng num_iter: 100 → 150 (+50% data)")
-    print("  ✓ Tăng batch_size: 8 → 16 (+100% samples per iteration)")
-    print("  ✓ PPO với tất cả optimizations")
-    print("  ✓ Clustering parameters tối ưu")
-    print("\nExpected Results:")
-    print("  - Clustering: 2-3 clusters (thay vì 1)")
-    print("  - Stability: Performance ổn định, không giảm dần")
-    print("\nNext steps:")
-    print(f"  1. Check clustering: {model_path}/clustering_summary.json")
-    print(f"  2. Check training: {model_path}/training_summary.json")
-    print(f"  3. Compare with DDQN:")
-    print(f"     python compare_3_models_120p4k.py \\")
-    print(f"         --sumo_config nets/120p4k/run_120p4k.sumocfg \\")
-    print(f"         --ddqn_model_path ddqn_sumo/output/120p4k/ddqn_model_final.pth \\")
-    print(f"         --llirl_model_path llirl_sumo/saves/120p4k_ultimate_test1 \\")
-    print(f"         --output output/comparison_120p4k_ultimate \\")
-    print(f"         --num_episodes 5")
-    print("=" * 80)
-

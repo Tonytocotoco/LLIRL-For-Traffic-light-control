@@ -187,7 +187,7 @@ class SUMOEnv(gym.Env):
             phase = phase % 4
         
         # Set phase duration (fixed green time)
-        phase_duration = self.green_time_min + (self.green_time_max - self.green_time_min) // 2
+        phase_duration = self.green_time_min 
         
         # Execute phase - each phase is 2 steps (green + yellow)
         phase_index = phase * 2
@@ -216,11 +216,37 @@ class SUMOEnv(gym.Env):
         observation = self._get_observation()
         done = self.step_count >= self.max_steps
         
+     # --- collect metrics for evaluation ---
+        controlled_lanes = traci.trafficlight.getControlledLanes(self.tl_id)
+
+        total_waiting = 0
+        total_queue = 0
+        total_vehicle = 0
+        total_speed = 0
+        count_speed = 0
+
+        for lane_id in controlled_lanes:
+            total_waiting += traci.lane.getWaitingTime(lane_id)
+            total_queue += traci.lane.getLastStepHaltingNumber(lane_id)
+            total_vehicle += traci.lane.getLastStepVehicleNumber(lane_id)
+            speed = traci.lane.getLastStepMeanSpeed(lane_id)
+            if speed >= 0:  # avoid invalid
+                total_speed += speed
+                count_speed += 1
+
+        avg_speed = total_speed / count_speed if count_speed > 0 else 0.0
+
         info = {
             'step_count': self.step_count,
             'phase': phase,
-            'phase_duration': phase_duration
+            'phase_duration': phase_duration,
+            'waiting_time': total_waiting,
+            'queue_length': total_queue,
+            'vehicle_count': total_vehicle,
+            'speed': avg_speed
         }
+
+        
         
         # Gym new API: return (obs, reward, terminated, truncated, info)
         terminated = done

@@ -150,7 +150,6 @@ tasks = np.concatenate([tasks, route_vars], axis=1)
 
 
 
-
 ### build a sampler given an environment
 env_name = 'SUMO-SingleIntersection-v1'
 sumo_config_path = os.path.abspath(args.sumo_config)

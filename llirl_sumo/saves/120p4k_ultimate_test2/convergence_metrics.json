@@ -1,0 +1,35 @@
+{
+  "likelihood_convergence": [
+    2835744.0,
+    39148.375,
+    367690.0,
+    56365.125,
+    67059.25,
+    26407.375,
+    64371.375,
+    40026.75,
+    23426.5
+  ],
+  "posterior_stability": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "cluster_stability": [
+    true,
+    false,
+    false,
+    true,
+    true,
+    false,
+    false,
+    false,
+    true
+  ]
+}

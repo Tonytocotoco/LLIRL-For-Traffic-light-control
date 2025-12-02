@@ -45,11 +45,7 @@ from myrllib.algorithms.reinforce import REINFORCE
 from myrllib.algorithms.trpo import TRPO 
 from myrllib.algorithms.ppo import PPO
 from myrllib.mixture.inference import CRP
-from myrllib.utils.policy_utils import (
-    create_general_policy, 
-    evaluate_policy_performance,
-    evaluate_policies
-)
+from myrllib.utils.policy_utils import create_general_policy
 
 
 start_time = time.time()
@@ -82,11 +78,11 @@ parser.add_argument('--num_periods', type=int, default=30)
 parser.add_argument('--device', type=str, default='cpu')
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--use_general_policy', action='store_true', default=True,
-        help='Use general policy for evaluation and selection')
+        help='Use general policy for initialization of new clusters')
 parser.add_argument('--num_test_episodes', type=int, default=3,
-        help='Number of episodes to test policies')
+        help='(Unused now) Number of episodes to test policies')
 parser.add_argument('--policy_eval_weight', type=float, default=0.5,
-        help='Weight for policy evaluation vs cluster selection (0=cluster only, 1=eval only)')
+        help='(Unused now) Kept for compatibility')
 parser.add_argument('--max_steps', type=int, default=7200,
         help='Maximum number of steps per episode')
 parser.add_argument('--use_baseline', action='store_true', default=False,
@@ -101,6 +97,8 @@ parser.add_argument('--early_stop_threshold', type=float, default=0.01,
         help='Threshold for early stopping based on performance improvement')
 parser.add_argument('--grad_clip', type=float, default=0.5,
         help='Gradient clipping value')
+parser.add_argument('--ddqn_init_path', type=str, default=None,
+        help='Path to DDQN model for policy initialization (transfer learning)')
 args = parser.parse_args()
 print(args)
 
@@ -282,8 +280,29 @@ print('The nominal task:', tasks[0])
 sampler.reset_task(tasks[0])
 
 ### generate the nominal policy model at the first time period
-policy_init = NormalMLPPolicy(state_dim, action_dim, 
+# Try to initialize from DDQN if available (Transfer Learning)
+if args.ddqn_init_path and os.path.exists(args.ddqn_init_path):
+    print(f'\n[TRANSFER LEARNING] Initializing policy from DDQN: {args.ddqn_init_path}')
+    try:
+        from utils.ddqn_to_policy import convert_ddqn_to_policy
+        policy_init, success = convert_ddqn_to_policy(
+            args.ddqn_init_path, state_dim, action_dim,
+            hidden_sizes=(args.hidden_size,) * args.num_layers,
+            device=device
+        )
+        if success:
+            print('✓ Policy initialized from DDQN (Transfer Learning)')
+        else:
+            print('[WARNING] DDQN conversion failed, using random initialization')
+    except Exception as e:
+        print(f'[WARNING] Failed to load DDQN for transfer learning: {e}')
+        print('  Using random initialization instead')
+        policy_init = NormalMLPPolicy(state_dim, action_dim, 
         hidden_sizes=(args.hidden_size,) * args.num_layers)
+else:
+    policy_init = NormalMLPPolicy(state_dim, action_dim, 
+            hidden_sizes=(args.hidden_size,) * args.num_layers)
+
 learner_init = generate_learner(policy_init)
 
 ### record the performance 
@@ -363,15 +382,11 @@ torch.save({
 print(f'Saved optimal policy snapshot for period 1')
 
 ### in the following time periods, dynamic environments
-# Track policy selection method
+# Track policy selection (cleaned: chỉ cluster-based)
 policy_selection_history = {
     'periods': [],
     'cluster_based_policy': [],
-    'performance_based_policy': [],
     'selected_policy': [],
-    'selection_method': [],  # 'cluster', 'performance', 'combined'
-    'cluster_reward': [],
-    'performance_reward': [],
     'final_reward': []
 }
 
@@ -399,30 +414,19 @@ try:
             print(f'  -> Treating as new cluster, creating policy...')
             task_id = num_policies + 1
         
-        # Step 1: Cluster-based selection (cách cũ)
-        cluster_policy = None
-        cluster_reward = None
+        # Step 1: Cluster-based selection (chỉ dùng cluster)
         if task_id <= num_policies:
-            cluster_policy = policies[task_id-1]
             print(f'Cluster-based selection: Policy {task_id}')
         elif task_id == num_policies + 1:
             print('New cluster detected, will create new policy')
         
-        # Step 2: Performance-based selection (nếu enabled)
-        performance_policy = None
-        performance_reward = None
-        selected_policy = None
-        selection_method = 'cluster'
+        # Step 2: Chuẩn bị general policy cho init cluster mới (nếu cần)
         general_policy = None
-        
-        if args.use_general_policy and num_policies > 0:
-            print('\n--- Policy Evaluation Phase ---')
+        if task_id == num_policies + 1 and args.use_general_policy and num_policies > 0:
+            print('\n--- General Policy Creation Phase (for new cluster init) ---')
             
-            # Tạo general policy từ weighted average
-            # Normalize priors: prior[policy] / (tổng prior) * tham số của policy
             if crp is not None and len(crp._prior) >= num_policies:
                 priors_raw = crp._prior[:num_policies]
-                # Normalize: prior[i] / sum(priors)
                 priors_sum = priors_raw.sum()
                 if priors_sum > 0:
                     priors = (priors_raw / priors_sum).tolist()
@@ -436,69 +440,33 @@ try:
                 (args.hidden_size,) * args.num_layers,
                 device=device
             )
-            print('Created general policy from weighted average')
-            
-            # Evaluate tất cả policies (bao gồm general policy)
-            all_policies_to_test = policies + [general_policy]
-            best_policy, best_reward, policy_rewards = evaluate_policies(
-                all_policies_to_test, sampler, args.num_test_episodes, device
-            )
-            
-            if best_policy is not None:
-                performance_policy = best_policy
-                performance_reward = best_reward
-                print(f'Performance-based selection: Best reward = {best_reward:.2f}')
-                print(f'Policy rewards: {policy_rewards}')
-            
-            # Step 3: Kết hợp 2 cách chọn
-            if cluster_policy is not None and performance_policy is not None:
-                # Evaluate cluster policy
-                cluster_reward, _ = evaluate_policy_performance(
-                    cluster_policy, sampler, args.num_test_episodes, device
-                )
-                
-                # Weighted combination
-                combined_score_cluster = (1 - args.policy_eval_weight) * cluster_reward
-                combined_score_perf = args.policy_eval_weight * performance_reward
-                
-                if combined_score_perf > combined_score_cluster:
-                    selected_policy = performance_policy
-                    selection_method = 'performance'
-                    print(f'Selected: Performance-based (score: {combined_score_perf:.2f} > {combined_score_cluster:.2f})')
-                else:
-                    selected_policy = cluster_policy
-                    selection_method = 'cluster'
-                    print(f'Selected: Cluster-based (score: {combined_score_cluster:.2f} >= {combined_score_perf:.2f})')
-            elif performance_policy is not None:
-                selected_policy = performance_policy
-                selection_method = 'performance'
-                print('Selected: Performance-based (no cluster policy)')
-            elif cluster_policy is not None:
-                selected_policy = cluster_policy
-                selection_method = 'cluster'
-                print('Selected: Cluster-based (no performance evaluation)')
+            print('Created general policy from weighted average for new cluster initialization')
         
-        # Step 4: Handle policy creation/selection
+        # Step 3: Handle policy creation/selection
         if task_id == num_policies + 1:
             # Tạo policy mới cho cluster mới
             print('Generate a new policy for new cluster...')
             policy = NormalMLPPolicy(state_dim, action_dim, 
                     hidden_sizes=(args.hidden_size,) * args.num_layers)
             
-            # Initialize từ best policy (nếu có performance evaluation)
-            if performance_policy is not None and general_policy is not None and performance_policy != general_policy:
-                # Initialize từ best performance policy (không phải general)
-                policy.load_state_dict(performance_policy.state_dict())
-                print('Initialized new policy from best performance policy')
-            elif general_policy is not None:
-                # Initialize từ general policy
+            # Ưu tiên: init từ general policy, nếu không thì random weighted theo CRP priors
+            if general_policy is not None:
                 policy.load_state_dict(general_policy.state_dict())
                 print('Initialized new policy from general policy')
             else:
-                # Fallback: random existing policy
-                index = np.random.choice(num_policies)
+                # Fallback: random existing policy, weighted theo CRP priors nếu có
+                if crp is not None and len(crp._prior) >= num_policies:
+                    priors_raw = crp._prior[:num_policies]
+                    priors_sum = priors_raw.sum()
+                    if priors_sum > 0:
+                        probs = priors_raw / priors_sum
+                        index = np.random.choice(num_policies, p=probs)
+                    else:
+                        index = np.random.choice(num_policies)
+                else:
+                    index = np.random.choice(num_policies)
                 policy.load_state_dict(policies[index].state_dict())
-                print(f'Initialized new policy from random existing policy {index}')
+                print(f'Initialized new policy from CRP-weighted random existing policy {index}')
             
             learner = generate_learner(policy)
             rews, period_metrics = inner_train(policy, learner, period=period, track_metrics=True)
@@ -507,133 +475,31 @@ try:
             num_policies += 1
             
         elif task_id <= num_policies:
-            # Lưu policy gốc của cluster để không mất lịch sử
-            original_cluster_policy = policies[task_id-1]
-            original_cluster_learner = learners[task_id-1]
+            # Luôn dùng policy của đúng cluster (không còn performance-based selection)
+            policy = policies[task_id-1]
+            learner = learners[task_id-1]
             
-            # Chọn policy dựa trên selection method
-            policy_idx = None  # Index của policy được chọn trong policies list
-            is_using_general_policy = False
-            is_using_own_cluster_policy = False
+            print(f'Using cluster-based policy {task_id}')
             
-            if selected_policy is not None and selection_method == 'performance':
-                # Sử dụng performance-based policy
-                # Tìm learner tương ứng
-                for idx, p in enumerate(policies):
-                    if p is selected_policy:
-                        policy_idx = idx
-                        break
-                
-                if policy_idx is not None:
-                    # Policy từ library được chọn
-                    is_using_own_cluster_policy = (policy_idx == task_id - 1)
-                    
-                    if is_using_own_cluster_policy:
-                        # Dùng chính policy của cluster này → không cần clone
-                        policy = selected_policy
-                        learner = learners[policy_idx]
-                        print(f'Using performance-selected policy (index {policy_idx}, cluster {policy_idx+1})')
-                        print(f'  -> Selected policy belongs to current cluster {task_id}')
-                    else:
-                        # Policy từ cluster khác → cần clone để không ảnh hưởng policy gốc
-                        policy = NormalMLPPolicy(state_dim, action_dim, 
-                                hidden_sizes=(args.hidden_size,) * args.num_layers)
-                        policy.load_state_dict(selected_policy.state_dict())
-                        learner = generate_learner(policy)  
-                        print(f'Using performance-selected policy (index {policy_idx}, cluster {policy_idx+1})')
-                        print(f'  -> Selected policy belongs to different cluster {policy_idx+1}')
-                        print(f'  -> Cloned policy to avoid in-place updates')
-                elif general_policy is not None and selected_policy == general_policy:
-                    # Policy là general policy → tạo policy mới từ general policy
-                    policy = NormalMLPPolicy(state_dim, action_dim, 
-                            hidden_sizes=(args.hidden_size,) * args.num_layers)
-                    policy.load_state_dict(general_policy.state_dict())
-                    learner = generate_learner(policy)
-                    is_using_general_policy = True
-                    print('Using general policy, created new policy and learner')
-                else:
-                    # Fallback to cluster policy
-                    policy = original_cluster_policy
-                    learner = original_cluster_learner
-                    is_using_own_cluster_policy = True
-                    print(f'Fallback to cluster-based policy {task_id}')
-            else:
-                # Sử dụng cluster-based policy (default)
-                policy = original_cluster_policy
-                learner = original_cluster_learner
-                is_using_own_cluster_policy = True
-                print(f'Using cluster-based policy {task_id}')
-            
-            # Train policy (policy có thể là clone hoặc original)
+            # Train policy của cluster hiện tại
             rews, period_metrics = inner_train(policy, learner, period=period, track_metrics=True)
             
-            # Update policy trong library - Update đúng vị trí theo flowchart
-            # Strategy theo flowchart: θ_{t+1}^(l*) ← θ_t* (update policy đã được chọn và train)
-            if policy_idx is not None:
-                # Case 1: Policy từ library được chọn → update vào cluster của policy đó
-                policies[policy_idx] = policy
-                learners[policy_idx] = learner
-                print(f'[OK] Updated cluster {policy_idx+1} policy after training (l*={policy_idx+1})')
-                
-                # Nếu không phải cluster hiện tại, thông báo
-                if policy_idx != task_id - 1:
-                    print(f'  -> Cluster {task_id} policy remains unchanged')
-                    
-            elif is_using_general_policy:
-                # Case 2: General policy được chọn → update vào cluster hiện tại
-                # (theo flowchart, general policy được coi như policy của cluster hiện tại)
-                policies[task_id-1] = policy
-                learners[task_id-1] = learner
-                print(f'[OK] Updated cluster {task_id} with trained general policy (l*={task_id})')
-                
-            elif is_using_own_cluster_policy:
-                # Case 3: Cluster-based selection → update cluster hiện tại
-                policies[task_id-1] = policy
-                learners[task_id-1] = learner
-                print(f'[OK] Updated cluster {task_id} policy after training (l*={task_id})')
-                
-            else:
-                # Fallback: không nên xảy ra
-                print(f'[WARNING] No policy update performed for cluster {task_id}')
+            # Update policy của cluster hiện tại
+            policies[task_id-1] = policy
+            learners[task_id-1] = learner
+            print(f'[OK] Updated cluster {task_id} policy after training (l*={task_id})')
 
         else:
             raise ValueError(f'Error on task id: {task_id}, num_policies: {num_policies}')
         
-        # Track selection history
+        # Track selection history (clean)
         policy_selection_history['periods'].append(period + 1)
-        policy_selection_history['cluster_based_policy'].append(task_id if task_id <= num_policies else None)
-        
-        # Find performance policy index
-        perf_policy_idx = None
-        if selected_policy is not None:
-            if general_policy is not None and selected_policy == general_policy:
-                perf_policy_idx = 'general'
-            else:
-                for idx, p in enumerate(policies):
-                    # Compare by checking if same object or same parameters
-                    if p is selected_policy:
-                        perf_policy_idx = idx + 1
-                        break
-        
-        policy_selection_history['performance_based_policy'].append(perf_policy_idx)
-        
-        # Find selected policy index
-        selected_policy_idx = None
-        if selection_method == 'cluster':
-            selected_policy_idx = task_id if task_id <= num_policies else None
-        else:
-            if general_policy is not None and selected_policy == general_policy:
-                selected_policy_idx = 'general'
-            else:
-                for idx, p in enumerate(policies):
-                    if p is selected_policy:
-                        selected_policy_idx = idx + 1
-                        break
-        
-        policy_selection_history['selected_policy'].append(selected_policy_idx)
-        policy_selection_history['selection_method'].append(selection_method)
-        policy_selection_history['cluster_reward'].append(float(cluster_reward) if cluster_reward is not None else None)
-        policy_selection_history['performance_reward'].append(float(performance_reward) if performance_reward is not None else None)
+        policy_selection_history['cluster_based_policy'].append(
+            task_id if task_id <= num_policies else None
+        )
+        policy_selection_history['selected_policy'].append(
+            task_id if task_id <= num_policies else None
+        )
         policy_selection_history['final_reward'].append(float(rews.mean()))
         rews_llirl[period] = rews
 
@@ -903,17 +769,17 @@ finally:
     # Save training summary - atomic write
     try:
         training_summary = {
-    'total_periods': args.num_periods,
-    'num_clusters': num_policies,
-    'num_iterations_per_period': args.num_iter,
-    'algorithm': args.algorithm,
-    'learning_rate': args.lr,
-    'optimizer': args.opt,
-    'hidden_size': args.hidden_size,
-    'num_layers': args.num_layers,
-    'final_average_reward': float(rews_llirl[-1].mean()) if len(rews_llirl) > 0 and rews_llirl[-1].sum() != 0 else 0.0,
-    'best_period_reward': float(rews_llirl.max()) if rews_llirl.sum() != 0 else 0.0,
-    'best_period': int(rews_llirl.max(axis=1).argmax()) + 1 if rews_llirl.sum() != 0 else 1,
+            'total_periods': args.num_periods,
+            'num_clusters': num_policies,
+            'num_iterations_per_period': args.num_iter,
+            'algorithm': args.algorithm,
+            'learning_rate': args.lr,
+            'optimizer': args.opt,
+            'hidden_size': args.hidden_size,
+            'num_layers': args.num_layers,
+            'final_average_reward': float(rews_llirl[-1].mean()) if len(rews_llirl) > 0 and rews_llirl[-1].sum() != 0 else 0.0,
+            'best_period_reward': float(rews_llirl.max()) if rews_llirl.sum() != 0 else 0.0,
+            'best_period': int(rews_llirl.max(axis=1).argmax()) + 1 if rews_llirl.sum() != 0 else 1,
             'training_time_minutes': float((time.time() - start_time) / 60.0)
         }
         summary_path = os.path.join(args.model_path, 'training_summary.json')
@@ -939,35 +805,6 @@ finally:
         print(f'[OK] Saved detailed training metrics to {metrics_path}')
     except Exception as e:
         print(f'[WARNING] Error saving training metrics: {e}')
-
-    # Save experiment configuration - atomic write
-    try:
-        experiment_config = {
-    'algorithm': args.algorithm,
-    'optimizer': args.opt,
-    'learning_rate': args.lr,
-    'batch_size': args.batch_size,
-    'num_iterations': args.num_iter,
-    'num_periods': args.num_periods,
-    'hidden_size': args.hidden_size,
-    'num_layers': args.num_layers,
-    'baseline': args.baseline,
-    'device': str(device),
-    'seed': args.seed,
-    'sumo_config': args.sumo_config,
-    'model_path': args.model_path,
-            'output_path': args.output
-        }
-        config_path = os.path.join(args.model_path, 'experiment_config.json')
-        temp_config_path = config_path + '.tmp'
-        with open(temp_config_path, 'w') as f:
-            json.dump(experiment_config, f, indent=2)
-        if os.path.exists(config_path):
-            os.remove(config_path)
-        os.rename(temp_config_path, config_path)
-        print(f'[OK] Saved experiment configuration to {config_path}')
-    except Exception as e:
-        print(f'[WARNING] Error saving experiment config: {e}')
 
     # Compute and save performance statistics - atomic write
     try:
@@ -1024,4 +861,3 @@ finally:
     print('='*60)
     print('Results saved successfully!')
     print('='*60)
-
