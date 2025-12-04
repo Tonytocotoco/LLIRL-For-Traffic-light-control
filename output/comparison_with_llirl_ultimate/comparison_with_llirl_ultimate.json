@@ -6,7 +6,7 @@
     "seed": 20,
     "device": "cpu",
     "llirl_ultimate_path": "llirl_sumo/saves/120p4k_ultimate_test2",
-    "llirl_selected_cluster": -1
+    "llirl_selected_cluster": 1
   },
   "ddqn": {
     "model_path": "ddqn_sumo/saves/sumo_single_intersection/ddqn_model_final.pth",

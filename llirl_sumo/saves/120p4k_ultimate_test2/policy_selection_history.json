@@ -1,26 +1,6 @@
 {
-  "periods": [
-    2,
-    3,
-    4,
-    5
-  ],
-  "cluster_based_policy": [
-    2,
-    3,
-    4,
-    3
-  ],
-  "selected_policy": [
-    2,
-    3,
-    4,
-    3
-  ],
-  "final_reward": [
-    -136245.065625,
-    -112917.165625,
-    -99860.146875,
-    -72794.6046875
-  ]
+  "periods": [],
+  "cluster_based_policy": [],
+  "selected_policy": [],
+  "final_reward": []
 }

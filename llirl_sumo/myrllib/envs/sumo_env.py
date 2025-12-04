@@ -25,7 +25,7 @@ class SUMOEnv(gym.Env):
     """
     SUMO Environment for traffic light control at single intersection
     """
-    def __init__(self, sumo_config_path, max_steps=3600, yellow_time=3, green_time_min=10, green_time_max=60, use_gui=False):
+    def __init__(self, sumo_config_path, max_steps=7200, yellow_time=3, green_time_min=10, green_time_max=60, use_gui=False):
         super(SUMOEnv, self).__init__()
         
         
@@ -55,7 +55,7 @@ class SUMOEnv(gym.Env):
         self._prev_speed = 0.0
         
         # Early termination threshold
-        self._early_termination_threshold = 15.0  # vehicles per lane
+        self._early_termination_threshold = 10000000.0  # vehicles per lane
         
         # Route file management for dynamic traffic intensity
         self._original_route_file = None
@@ -165,7 +165,8 @@ class SUMOEnv(gym.Env):
                 # Scale vehsPerHour by traffic_intensity
                 if 'vehsPerHour' in flow.attrib:
                     old_rate = float(flow.get('vehsPerHour'))
-                    new_rate = old_rate * self._traffic_intensity
+                    
+                    new_rate = max(50, old_rate * self._traffic_intensity)
                     flow.set('vehsPerHour', str(new_rate))
                     flows_modified += 1
                 
@@ -277,9 +278,9 @@ class SUMOEnv(gym.Env):
                    "--no-warnings", "true"]
         
         # Only add --quit-on-end if not using GUI (GUI should stay open)
-        if not self.use_gui:
-            sumo_cmd.append("--quit-on-end")
-            sumo_cmd.append("true")
+        # if not self.use_gui:
+        # sumo_cmd.append("--quit-on-end")
+        # sumo_cmd.append("true")
         
         traci.start(sumo_cmd)
         self.sumo_running = True
@@ -479,7 +480,7 @@ class SUMOEnv(gym.Env):
         # Advance simulation a few steps
         try:
             for _ in range(5):
-                traci.simulationStep()
+                traci.simulation.step()
         except (traci.exceptions.FatalTraCIError, traci.exceptions.TraCIException, Exception) as e:
             # Connection lost during reset, try to recover
             print(f"[WARNING] SUMO connection lost during reset: {e}. Attempting to recover...")
@@ -492,7 +493,7 @@ class SUMOEnv(gym.Env):
             self._start_sumo()
             # Retry advancing simulation
             for _ in range(5):
-                traci.simulationStep()
+                traci.simulation.step()
         
         # Reset tracking variables for reward shaping
         self._prev_queue = 0.0
@@ -572,7 +573,7 @@ class SUMOEnv(gym.Env):
         
         while phase_steps < phase_duration and self.step_count < self.max_steps:
             try:
-                traci.simulationStep()
+                traci.simulation.step()
                 self.step_count += 1
                 phase_steps += 1
                 

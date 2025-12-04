@@ -6,7 +6,7 @@ from torch.distributions import Uniform
 from myrllib.envs.subproc_vec_env import SubprocVecEnv
 from myrllib.episodes.episode import BatchEpisodes
 
-def make_env(env_name, sumo_config_path=None, seed=0, use_gui=False, max_steps=3600):
+def make_env(env_name, sumo_config_path=None, seed=0, use_gui=False, max_steps=7200):
     def _make_env():
         env = gym.make(env_name, sumo_config_path=sumo_config_path, use_gui=use_gui, max_steps=max_steps)
         env.seed(seed)
@@ -14,7 +14,7 @@ def make_env(env_name, sumo_config_path=None, seed=0, use_gui=False, max_steps=3
     return _make_env
 
 class BatchSampler(object):
-    def __init__(self, env_name, batch_size, num_workers=1, seed=0, sumo_config_path=None, use_gui=False, max_steps=3600):
+    def __init__(self, env_name, batch_size, num_workers=1, seed=0, sumo_config_path=None, use_gui=False, max_steps=7200):
         self.env_name = env_name
         self.batch_size = batch_size
         self.num_workers = num_workers

@@ -32,8 +32,7 @@ from myrllib.envs import sumo_env
 import gym
 gym.register(
     'SUMO-SingleIntersection-v1',
-    entry_point='myrllib.envs.sumo_env:SUMOEnv',
-    max_episode_steps=14400  # Thay đổi từ 3600 thành 14400 (4 giờ)
+    entry_point='myrllib.envs.sumo_env:SUMOEnv'
 )
 
 ### personal lib
@@ -388,7 +387,14 @@ else:
 if os.path.exists(ckpt_path):
     print(f"\n[TRANSFER LEARNING] Loading PPO policy from: {ckpt_path}")
     try:
-        state_dict = torch.load(ckpt_path, map_location=device)
+        checkpoint = torch.load(ckpt_path, map_location=device, weights_only = False)
+        if isinstance(checkpoint, dict) and "ac_network_state_dict" in checkpoint:
+            state_dict = checkpoint["ac_network_state_dict"]
+        else:
+            
+            state_dict = checkpoint
+
+
         missing, unexpected = policy_init.load_state_dict(state_dict, strict=False)
 
         print("✓ PPO policy weights loaded (transfer learning).")
@@ -438,7 +444,7 @@ print('Train the nominal model...')
 rews_init, init_metrics = inner_train(policy_init, learner_init, period=0, track_metrics=True)
 
 # Store initial period metrics
-training_metrics['periods'].append(0)
+training_metrics['periods'].append(1)
 training_metrics['iterations'].append(list(range(args.num_iter)))
 training_metrics['rewards'].append(rews_init.tolist())
 training_metrics['rewards_mean'].append(float(rews_init.mean()))
@@ -731,7 +737,7 @@ try:
             print(f'[WARNING] Could not save lightweight checkpoint: {e}')
         
         # Cleanup SUMO connections periodically to prevent memory leaks
-        if (period + 1) % 5 == 0:
+        if (period + 1) % 10 == 0:
             try:
                 # env close
                 env_obj = None

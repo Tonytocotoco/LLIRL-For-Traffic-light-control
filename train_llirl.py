@@ -66,7 +66,7 @@ if __name__ == "__main__":
         "--algorithm", "ppo",
         "--opt", "adam",
         "--lr", "1e-3",
-        "--num_iter", "20",
+        "--num_iter", "10",
         "--num_periods", "10",
         "--device", "cuda",
         "--seed", "1009",
