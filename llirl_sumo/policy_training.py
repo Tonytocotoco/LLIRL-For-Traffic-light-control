@@ -733,20 +733,26 @@ try:
         # Cleanup SUMO connections periodically to prevent memory leaks
         if (period + 1) % 5 == 0:
             try:
-                if hasattr(sampler, '_env') and hasattr(sampler._env, 'sumo_running'):
-                    if sampler._env.sumo_running:
-                        try:
-                            import traci
-                            traci.close()
-                            sampler._env.sumo_running = False
-                        except:
-                            pass
-                # Force garbage collection
+                # env close
+                env_obj = None
+
+
+                if hasattr(sampler, "_env"):
+                    env_obj = getattr(sampler._env, "unwrapped", sampler._env)
+
+
+                if env_obj is not None and hasattr(env_obj, "close"):
+                    print(f"[INFO] Periodic SUMO cleanup at period {period+1}")
+                    env_obj.close()   
+
+                # --- Clean RAM ---
                 gc.collect()
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            except:
-                pass
+
+            except Exception as e:
+                print(f"[WARNING] Periodic SUMO cleanup failed: {e}")
+
 
 except Exception as e:
     print(f'\n[ERROR] Training crashed: {str(e)}')
