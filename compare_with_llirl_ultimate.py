@@ -92,7 +92,7 @@ parser.add_argument(
 )
 parser.add_argument(
     '--ddqn_model_path', type=str,
-    default='ddqn_sumo/saves/120p4k/ddqn_model_final.pth',
+    default='ddqn_sumo/saves/sumo_single_intersection/ddqn_model_final.pth',
     help='Path đến model DDQN'
 )
 
@@ -103,9 +103,10 @@ parser.add_argument(
 )
 parser.add_argument(
     '--ppo_model_path', type=str,
-    default='ppo_sumo/saves/sumo_single_intersection/ppo_policy_final.pth',
+    default='ppo_sumo/output/models/ppo_final.pth',
     help='Path đến model PPO (nếu có, để so sánh thêm)'
 )
+
 parser.add_argument(
     '--output', type=str,
     default='output/comparison_with_llirl_ultimate',
@@ -113,7 +114,7 @@ parser.add_argument(
 )
 parser.add_argument(
     '--num_episodes', type=int,
-    default=2,
+    default=4,
     help='Số episode test cho mỗi model'
 )
 parser.add_argument(
@@ -128,7 +129,7 @@ parser.add_argument(
 )
 parser.add_argument(
     '--seed', type=int,
-    default=27,
+    default=20,
     help='Random seed'
 )
 
@@ -200,7 +201,6 @@ if not os.path.exists(args.llirl_ultimate_path):
 def load_policies(model_dir, device):
     """
     Load LLIRL policies từ policies_final.pth
-    - Dùng weights_only=False (giống bài test bạn chạy)
     - Trả về: (list[policy], checkpoint_dict)
     """
     policies_path = os.path.join(model_dir, 'policies_final.pth')
@@ -316,39 +316,6 @@ ppo_output_path = auto_detect_output_path(args.ppo_model_path, 'ppo_sumo') \
 llirl_output_path = auto_detect_output_path(args.llirl_ultimate_path, 'llirl_sumo') \
                     or 'llirl_sumo/output/120p4k_ultimate'
 
-# -------- Training rewards loader --------
-def load_training_rewards(output_path, rewards_filename, model_name):
-    """Load training rewards from output directory (optional)"""
-    if not output_path or not os.path.exists(output_path):
-        print(f"[INFO] {model_name} output directory not found at {output_path} "
-              f"(training rewards not available)")
-        return None
-
-    rewards_file = os.path.join(output_path, rewards_filename)
-    if not os.path.exists(rewards_file):
-        rewards_file_tmp = rewards_file + '.tmp.npy'
-        if os.path.exists(rewards_file_tmp):
-            rewards_file = rewards_file_tmp
-
-    if not os.path.exists(rewards_file):
-        print(f"[INFO] {model_name} training rewards not found at {rewards_file} (optional)")
-        return None
-
-    try:
-        rewards = np.load(rewards_file)
-        print(f"✓ Loaded {model_name} training rewards from {rewards_file}")
-        print(f"  Training rewards shape: {rewards.shape}")
-        if rewards.ndim > 1:
-            print(f"  Training rewards: {rewards.shape[0]} periods, "
-                  f"{rewards.shape[1]} episodes/iterations per period")
-        return rewards
-    except Exception as e:
-        print(f"[WARNING] Could not load {model_name} training rewards from {rewards_file}: {e}")
-        return None
-
-ddqn_training_rewards = load_training_rewards(ddqn_output_path, 'rews_ddqn.npy', 'DDQN')
-ppo_training_rewards = load_training_rewards(ppo_output_path, 'rews_ppo.npy', 'PPO')
-llirl_training_rewards = load_training_rewards(llirl_output_path, 'rews_llirl.npy', 'LLIRL Ultimate')
 
 # -------- PPO model (optional) --------
 print("\n[3/3] Loading PPO model (optional)...")
@@ -367,6 +334,7 @@ ppo_policy = None
 ppo_metrics = None
 
 if os.path.exists(ppo_model_path):
+    print(os.path.exists(ppo_model_path))
     try:
         checkpoint = torch.load(ppo_model_path, map_location='cpu')
         if isinstance(checkpoint, dict) and 'q_network' in checkpoint:
@@ -433,14 +401,7 @@ def build_general_llirl_policy(llirl_policies, crp, checkpoint, device):
 
 
 def infer_cluster_with_E_step(llirl_sampler, general_policy, env_models, crp, clustering_config, device):
-    """
-    E-step:
-      1. Dùng general_policy thu thập 1 episode qua BatchSampler.
-      2. Episode -> (inputs, outputs) qua construct_env_io.
-      3. Tính log-likelihood cho từng env_model.
-      4. Kết hợp CRP prior → posterior.
-      5. Chọn cluster có posterior lớn nhất.
-    """
+
     if len(env_models) == 0:
         raise ValueError("No environment models loaded for E-step cluster inference")
 
@@ -708,8 +669,8 @@ print("=" * 80)
 print("\nGenerating RANDOM test tasks (intensity, var) like env_clustering.py...")
 
 task = np.hstack([
-    np.random.uniform(0.5, 1.0, size=(args.num_episodes, 1)),
-    np.random.uniform(0.0, 0.25, size=(args.num_episodes, 1))
+    np.random.uniform(1.5, 2.5, size=(args.num_episodes, 1)),
+    np.random.uniform(0.0, 0.5, size=(args.num_episodes, 1))
 ]).tolist()
 
 
@@ -826,6 +787,7 @@ if traci is not None:
 time.sleep(1.0)
 
 # --- Evaluate PPO (optional) ---
+
 if ppo_policy is not None:
     print("\n" + "=" * 80)
     print("[3/3] Evaluating PPO model...")
@@ -938,62 +900,8 @@ if valid_models and all(m['queue_lengths'] for m in valid_models.values()):
             if avg_queues[worst_queues] != 0 else 0
         print(f"  {model_name}: {q:.2f} vehicles ({improvement:+.1f}% vs worst)")
 
-print(f"\n📈 Training Progress Comparison:")
-training_data = []
-if ddqn_training_rewards is not None:
-    if ddqn_training_rewards.ndim > 1:
-        final_avg = np.mean([p[-1] for p in ddqn_training_rewards if len(p) > 0])
-        overall_avg = np.mean(ddqn_training_rewards)
-    else:
-        final_avg = ddqn_training_rewards[-1] if len(ddqn_training_rewards) > 0 else 0
-        overall_avg = np.mean(ddqn_training_rewards)
-    training_data.append(('DDQN', final_avg, overall_avg, ddqn_training_rewards.shape))
 
-if ppo_training_rewards is not None:
-    if ppo_training_rewards.ndim > 1:
-        final_avg = np.mean([p[-1] for p in ppo_training_rewards if len(p) > 0])
-        overall_avg = np.mean(ppo_training_rewards)
-    else:
-        final_avg = ppo_training_rewards[-1] if len(ppo_training_rewards) > 0 else 0
-        overall_avg = np.mean(ppo_training_rewards)
-    training_data.append(('PPO', final_avg, overall_avg, ppo_training_rewards.shape))
 
-if llirl_training_rewards is not None:
-    if llirl_training_rewards.ndim > 1:
-        final_avg = np.mean([p[-1] for p in llirl_training_rewards if len(p) > 0])
-        overall_avg = np.mean(llirl_training_rewards)
-    else:
-        final_avg = llirl_training_rewards[-1] if len(llirl_training_rewards) > 0 else 0
-        overall_avg = np.mean(llirl_training_rewards)
-    training_data.append(('LLIRL Ultimate', final_avg, overall_avg, llirl_training_rewards.shape))
-
-if training_data:
-    print(f"\n  Final Training Rewards (last iteration/episode):")
-    for model_name, final_avg, overall_avg, shape in training_data:
-        print(f"    {model_name}: {final_avg:.2f} (shape: {shape})")
-
-    print(f"\n  Overall Average Training Rewards:")
-    for model_name, final_avg, overall_avg, shape in training_data:
-        print(f"    {model_name}: {overall_avg:.2f}")
-
-    print(f"\n  Training vs Evaluation Comparison:")
-    eval_rewards = {}
-    if ddqn_metrics:
-        eval_rewards['DDQN'] = np.mean(ddqn_metrics['rewards'])
-    if ppo_metrics:
-        eval_rewards['PPO'] = np.mean(ppo_metrics['rewards'])
-    if llirl_metrics:
-        eval_rewards['LLIRL Ultimate'] = np.mean(llirl_metrics['rewards'])
-
-    for model_name, final_avg, overall_avg, shape in training_data:
-        if model_name in eval_rewards:
-            eval_avg = eval_rewards[model_name]
-            diff = eval_avg - final_avg
-            pct_diff = (diff / abs(final_avg)) * 100 if final_avg != 0 else 0
-            print(f"    {model_name}:")
-            print(f"      Final Training: {final_avg:.2f}")
-            print(f"      Evaluation    : {eval_avg:.2f}")
-            print(f"      Difference    : {diff:+.2f} ({pct_diff:+.1f}%)")
 
 ######################## Save Results ##########################################
 
@@ -1010,7 +918,6 @@ results = {
     'ddqn': {
         'model_path': args.ddqn_model_path,
         'output_path': ddqn_output_path,
-        'training_rewards_available': ddqn_training_rewards is not None,
         'rewards': ddqn_metrics['rewards'],
         'episode_lengths': ddqn_metrics['episode_lengths'],
         'waiting_times': ddqn_metrics['waiting_times'],
@@ -1022,13 +929,10 @@ results = {
         'avg_waiting_time': float(np.mean(ddqn_metrics['waiting_times'])) if ddqn_metrics['waiting_times'] else None,
         'avg_total_waiting_time': float(np.mean(ddqn_metrics['total_waiting_times'])) if ddqn_metrics['total_waiting_times'] else None,
         'avg_queue_length': float(np.mean(ddqn_metrics['queue_lengths'])) if ddqn_metrics['queue_lengths'] else None,
-        'training_rewards': ddqn_training_rewards.tolist() if ddqn_training_rewards is not None else None,
-        'training_rewards_shape': list(ddqn_training_rewards.shape) if ddqn_training_rewards is not None else None,
     },
     'llirl_ultimate': {
         'model_path': args.llirl_ultimate_path,
         'output_path': llirl_output_path,
-        'training_rewards_available': llirl_training_rewards is not None,
         'rewards': llirl_metrics['rewards'],
         'episode_lengths': llirl_metrics['episode_lengths'],
         'waiting_times': llirl_metrics['waiting_times'],
@@ -1040,13 +944,12 @@ results = {
         'avg_waiting_time': float(np.mean(llirl_metrics['waiting_times'])) if llirl_metrics['waiting_times'] else None,
         'avg_total_waiting_time': float(np.mean(llirl_metrics['total_waiting_times'])) if llirl_metrics['total_waiting_times'] else None,
         'avg_queue_length': float(np.mean(llirl_metrics['queue_lengths'])) if llirl_metrics['queue_lengths'] else None,
-        'training_rewards': llirl_training_rewards.tolist() if llirl_training_rewards is not None else None,
-        'training_rewards_shape': list(llirl_training_rewards.shape) if llirl_training_rewards is not None else None,
+
     },
     'ppo': {
         'model_path': ppo_model_path if ppo_policy is not None else None,
         'output_path': ppo_output_path if ppo_policy is not None else None,
-        'training_rewards_available': ppo_training_rewards is not None,
+
         'rewards': ppo_metrics['rewards'] if ppo_metrics else None,
         'episode_lengths': ppo_metrics['episode_lengths'] if ppo_metrics else None,
         'waiting_times': ppo_metrics['waiting_times'] if ppo_metrics else None,
@@ -1058,8 +961,7 @@ results = {
         'avg_waiting_time': float(np.mean(ppo_metrics['waiting_times'])) if ppo_metrics and ppo_metrics['waiting_times'] else None,
         'avg_total_waiting_time': float(np.mean(ppo_metrics['total_waiting_times'])) if ppo_metrics and ppo_metrics['total_waiting_times'] else None,
         'avg_queue_length': float(np.mean(ppo_metrics['queue_lengths'])) if ppo_metrics and ppo_metrics['queue_lengths'] else None,
-        'training_rewards': ppo_training_rewards.tolist() if ppo_training_rewards is not None else None,
-        'training_rewards_shape': list(ppo_training_rewards.shape) if ppo_training_rewards is not None else None,
+
     },
     'comparison': {
         'best_model_by_reward': best_model if valid_models else None,
@@ -1078,13 +980,7 @@ np.save(os.path.join(args.output, 'llirl_ultimate_rewards.npy'), np.array(llirl_
 if ppo_metrics:
     np.save(os.path.join(args.output, 'ppo_rewards.npy'), np.array(ppo_metrics['rewards']))
 
-# Save training rewards nếu có
-if ddqn_training_rewards is not None:
-    np.save(os.path.join(args.output, 'ddqn_training_rewards.npy'), ddqn_training_rewards)
-if ppo_training_rewards is not None:
-    np.save(os.path.join(args.output, 'ppo_training_rewards.npy'), ppo_training_rewards)
-if llirl_training_rewards is not None:
-    np.save(os.path.join(args.output, 'llirl_ultimate_training_rewards.npy'), llirl_training_rewards)
+
 
 ######################## Plot Comparison Charts ################################
 
@@ -1203,37 +1099,6 @@ def plot_comparison_charts(results, output_dir):
             ax4.text(bar.get_x() + bar.get_width()/2., bar.get_height(),
                      f'{ql:.2f}', ha='center', va='bottom', fontweight='bold')
 
-    # 5. Training Rewards per period
-    ax5 = plt.subplot(3, 3, 5)
-    has_training = False
-    if results['ddqn']['training_rewards'] is not None:
-        has_training = True
-        tr = np.array(results['ddqn']['training_rewards'])
-        if tr.ndim > 1:
-            final = [p[-1] if len(p) > 0 else 0 for p in tr]
-            ax5.plot(range(1, len(final) + 1), final, 'o-', label='DDQN', linewidth=2)
-    if results['llirl_ultimate']['training_rewards'] is not None:
-        has_training = True
-        tr = np.array(results['llirl_ultimate']['training_rewards'])
-        if tr.ndim > 1:
-            final = [p[-1] if len(p) > 0 else 0 for p in tr]
-            ax5.plot(range(1, len(final) + 1), final, 's-', label='LLIRL Ult.', linewidth=2)
-    if results['ppo']['training_rewards'] is not None:
-        has_training = True
-        tr = np.array(results['ppo']['training_rewards'])
-        if tr.ndim > 1:
-            final = [p[-1] if len(p) > 0 else 0 for p in tr]
-            ax5.plot(range(1, len(final) + 1), final, '^-', label='PPO', linewidth=2)
-    if has_training:
-        ax5.set_xlabel('Period', fontsize=12, fontweight='bold')
-        ax5.set_ylabel('Final Training Reward', fontsize=12, fontweight='bold')
-        ax5.set_title('Training Progress Comparison', fontsize=14, fontweight='bold')
-        ax5.legend(fontsize=9)
-        ax5.grid(True, alpha=0.3)
-    else:
-        ax5.text(0.5, 0.5, 'No training data', ha='center', va='center',
-                 transform=ax5.transAxes)
-        ax5.set_title('Training Progress Comparison', fontsize=14, fontweight='bold')
 
     # 6. Episode length
     ax6 = plt.subplot(3, 3, 6)

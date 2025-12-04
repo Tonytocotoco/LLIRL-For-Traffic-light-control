@@ -1,14 +1,14 @@
 {
-  "total_periods": 5,
+  "total_periods": 10,
   "num_clusters": 4,
-  "num_iterations_per_period": 10,
+  "num_iterations_per_period": 5,
   "algorithm": "ppo",
   "learning_rate": 0.001,
   "optimizer": "adam",
   "hidden_size": 200,
   "num_layers": 2,
-  "final_average_reward": -356.4715576171875,
-  "best_period_reward": -356.4715576171875,
-  "best_period": 5,
-  "training_time_minutes": 355.18276199897133
+  "final_average_reward": 0.0,
+  "best_period_reward": 0.0,
+  "best_period": 6,
+  "training_time_minutes": 56.179142475128174
 }

@@ -28,8 +28,9 @@ class SUMOEnv(gym.Env):
     def __init__(self, sumo_config_path, max_steps=3600, yellow_time=3, green_time_min=10, green_time_max=60, use_gui=False):
         super(SUMOEnv, self).__init__()
         
-        self._base_config_path = sumo_config_path
+        
         self.sumo_config_path = sumo_config_path
+        self._base_config_path = sumo_config_path
         self.max_steps = max_steps
         self.yellow_time = yellow_time
         self.green_time_min = green_time_min
@@ -117,9 +118,7 @@ class SUMOEnv(gym.Env):
         Reset environment task parameters and generate new route file
         task: array of [traffic_intensity, route_variation, ...]
         """
-        old_intensity = self._traffic_intensity
-        old_variation = self._route_variation
-        
+
         if len(task) >= 1:
             self._traffic_intensity = float(task[0])
         if len(task) >= 2:
@@ -255,7 +254,10 @@ class SUMOEnv(gym.Env):
     def _start_sumo(self):
         """Start SUMO simulation"""
         if self.sumo_running:
-            traci.close()
+            try:
+                traci.close()
+            except Exception as e:
+                print(f"[INFO] traci.close() failed in _start_sumo (probably already closed): {e}")
         
         # Use GUI if requested
         if self.use_gui:
@@ -459,8 +461,11 @@ class SUMOEnv(gym.Env):
                 traci.load(["-c", self.sumo_config_path])
             except Exception as e:
                 print(f"[WARNING] Could not reload SUMO config: {e}")
-                # Fallback: close and restart
-                traci.close()
+                try:
+                    traci.close()
+                except Exception as e2:
+
+                    print(f"[INFO] traci.close() failed in reset (probably already closed): {e2}")
                 self.sumo_running = False
                 self._start_sumo()
         
@@ -551,7 +556,16 @@ class SUMOEnv(gym.Env):
         # Determine which phase duration to use
         phase_idx = current_phase % len(action)
         phase_duration = int(action[phase_idx])
-        
+
+        try:
+        # Giữ nguyên phase hiện tại, chỉ chỉnh lại thời lượng theo action
+            traci.trafficlight.setPhase(self.tl_id, current_phase)
+            traci.trafficlight.setPhaseDuration(self.tl_id, phase_duration)
+        except (traci.exceptions.FatalTraCIError,
+                traci.exceptions.TraCIException,
+                Exception) as e:
+            print(f"[WARNING] Failed to apply action to traffic light: {e}")
+
         # Execute phase
         phase_steps = 0
         total_reward = 0.0

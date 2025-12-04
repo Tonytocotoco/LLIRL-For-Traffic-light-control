@@ -23,7 +23,7 @@ class BatchSampler(object):
         self.max_steps = max_steps
         
         self._env = gym.make(env_name, sumo_config_path=sumo_config_path, use_gui=use_gui, max_steps=max_steps)
-        
+
         # Handle num_workers=0 (no multiprocessing, e.g., on Windows)
         if num_workers == 0:
             self.envs = None  # Will use single env directly
@@ -52,8 +52,18 @@ class BatchSampler(object):
                             obs_tensor = obs_tensor.unsqueeze(0)
                         pi = policy(obs_tensor)
                         action_tensor = pi.sample()
-                        action = action_tensor.cpu().numpy()[0] if action_tensor.shape[0] == 1 else action_tensor.cpu().numpy()
-                    
+                        raw_action = action_tensor.cpu().numpy()[0] if action_tensor.shape[0] == 1 else action_tensor.cpu().numpy()
+
+                        # ===== MAP RAW ACTION -> [10, 60] =====
+                        norm_action = np.tanh(raw_action)  # [-1, 1]
+                        # dùng đúng min/max của env nếu có:
+                        try:
+                            green_min = float(self._env.green_time_min)
+                            green_max = float(self._env.green_time_max)
+                        except AttributeError:
+                            green_min, green_max = 10.0, 60.0   # fallback
+                        action = green_min + (norm_action + 1.0) * 0.5 * (green_max - green_min)
+
                     try:
                         next_obs, reward, terminated, truncated, info = self._env.step(action)
                         done = terminated or truncated
@@ -85,7 +95,9 @@ class BatchSampler(object):
                     episode_rews.append(reward)
                     episode_next_obs.append(next_obs)
                     obs = next_obs
-                
+                # DEBUG: tổng reward của episode
+                episode_return = float(sum(episode_rews))
+                print(f"[EP-DEBUG] batch_id={batch_id}, episode_return={episode_return}, steps={len(episode_rews)}")
                 # Append episode to batch
                 for i in range(len(episode_obs)):
                     episodes.append(
@@ -128,7 +140,13 @@ class BatchSampler(object):
                     pi = policy(obs_tensor)
 
                 actions_tensor = pi.sample()
-                actions = actions_tensor.cpu().numpy()
+                raw_actions = actions_tensor.cpu().numpy()   
+
+  
+                norm_actions = np.tanh(raw_actions)  
+                green_min, green_max = 10.0, 60.0    
+                actions = green_min + (norm_actions + 1.0) * 0.5 * (green_max - green_min)
+  
             new_obs, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
             episodes.append(observations, actions, rewards, new_obs, batch_ids)
 

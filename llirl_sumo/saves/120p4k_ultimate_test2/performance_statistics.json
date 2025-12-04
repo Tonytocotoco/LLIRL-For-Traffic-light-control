@@ -1,18 +1,18 @@
 {
-  "overall_mean_reward": -16372.418310546875,
-  "overall_std_reward": 19359.70402732201,
-  "overall_max_reward": -356.4715576171875,
-  "overall_min_reward": -42204.265625,
-  "final_period_mean": -356.4715576171875,
-  "best_period_mean": -356.4715576171875,
-  "worst_period_mean": -42204.265625,
+  "overall_mean_reward": -50652.3296875,
+  "overall_std_reward": 53015.318059164136,
+  "overall_max_reward": 0.0,
+  "overall_min_reward": -137271.6875,
+  "final_period_mean": 0.0,
+  "best_period_mean": 0.0,
+  "worst_period_mean": -136245.065625,
   "learning_trajectory": {
-    "early_periods_mean": -661.8946533203125,
-    "middle_periods_mean": -19319.729858398438,
-    "late_periods_mean": -21280.368591308594
+    "early_periods_mean": -111289.51510416667,
+    "middle_periods_mean": -57551.58385416667,
+    "late_periods_mean": 0.0
   },
   "consistency": {
-    "period_std_mean": 0.0,
-    "iteration_std_mean": 19359.704027322012
+    "period_std_mean": 345.0436455367048,
+    "iteration_std_mean": 53014.51668413216
   }
 }

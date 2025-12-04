@@ -97,8 +97,8 @@ parser.add_argument('--early_stop_threshold', type=float, default=0.01,
         help='Threshold for early stopping based on performance improvement')
 parser.add_argument('--grad_clip', type=float, default=0.5,
         help='Gradient clipping value')
-parser.add_argument('--ddqn_init_path', type=str, default=None,
-        help='Path to DDQN model for policy initialization (transfer learning)')
+parser.add_argument('--ppo_init_path', type=str, default=None,
+        help='Path to PPO model for policy initialization (transfer learning)')
 args = parser.parse_args()
 print(args)
 
@@ -133,6 +133,47 @@ def generate_learner(policy):
     return learner 
 
 ### train a policy using a learner
+# def inner_train(policy, learner, period=0, track_metrics=True):
+#     rews = np.zeros(args.num_iter)
+#     iteration_metrics = {
+#         'rewards': [],
+#         'gradient_norms': [],
+#         'losses': [],
+#         'learning_rates': []
+#     }
+    
+#     for idx in tqdm(range(args.num_iter)):
+#         episodes = sampler.sample(policy, device=device)
+#         reward = episodes.evaluate()
+#         rews[idx] = reward
+
+#         print(f"[DEBUG] period={period}, iter={idx}, reward={reward}")
+        
+#         if track_metrics:
+#             iteration_metrics['rewards'].append(float(reward))
+            
+#             # Track gradient norms before update
+#             if hasattr(learner, 'opt') and learner.opt is not None:
+#                 total_norm = 0.0
+#                 for p in policy.parameters():
+#                     if p.grad is not None:
+#                         param_norm = p.grad.data.norm(2)
+#                         total_norm += param_norm.item() ** 2
+#                 total_norm = total_norm ** (1. / 2)
+#                 iteration_metrics['gradient_norms'].append(float(total_norm))
+                
+#                 # Track learning rate
+#                 if hasattr(learner.opt, 'param_groups') and len(learner.opt.param_groups) > 0:
+#                     iteration_metrics['learning_rates'].append(float(learner.opt.param_groups[0]['lr']))
+        
+#         learner.step(episodes, clip=True)
+    
+#     return rews, iteration_metrics
+
+import torch
+import numpy as np
+from tqdm import tqdm
+
 def inner_train(policy, learner, period=0, track_metrics=True):
     rews = np.zeros(args.num_iter)
     iteration_metrics = {
@@ -143,30 +184,76 @@ def inner_train(policy, learner, period=0, track_metrics=True):
     }
     
     for idx in tqdm(range(args.num_iter)):
+        # 1) Lấy dữ liệu / episode
+        
         episodes = sampler.sample(policy, device=device)
         reward = episodes.evaluate()
         rews[idx] = reward
-        
+
+        print(f"[DEBUG] period={period}, iter={idx}, reward={reward}")
+
+        # 2) Lưu reward vào metrics
         if track_metrics:
             iteration_metrics['rewards'].append(float(reward))
-            
-            # Track gradient norms before update
-            if hasattr(learner, 'opt') and learner.opt is not None:
-                total_norm = 0.0
-                for p in policy.parameters():
-                    if p.grad is not None:
-                        param_norm = p.grad.data.norm(2)
-                        total_norm += param_norm.item() ** 2
-                total_norm = total_norm ** (1. / 2)
-                iteration_metrics['gradient_norms'].append(float(total_norm))
-                
-                # Track learning rate
-                if hasattr(learner.opt, 'param_groups') and len(learner.opt.param_groups) > 0:
-                    iteration_metrics['learning_rates'].append(float(learner.opt.param_groups[0]['lr']))
         
-        learner.step(episodes, clip=True)
-    
+        # 3) Lưu lại tham số trước khi update để đo avg_param_change
+        with torch.no_grad():
+            params_before = [p.detach().clone() for p in policy.parameters()]
+
+        # 4) UPDATE: cho learner bước tối ưu
+        # Nếu learner.step trả về loss thì bắt luôn, không thì loss sẽ là None
+        loss = None
+        try:
+            loss = learner.step(episodes, clip=True)
+        except TypeError:
+            # Trường hợp learner.step không return gì
+            learner.step(episodes, clip=True)
+
+        # 5) Tính mức thay đổi tham số trung bình sau khi update
+        with torch.no_grad():
+            total_delta = 0.0
+            n_params = 0
+            for p, p_before in zip(policy.parameters(), params_before):
+                delta = (p - p_before).abs().mean().item()
+                total_delta += delta
+                n_params += 1
+            avg_delta = total_delta / max(n_params, 1)
+
+        # 6) Đo gradient norm & learning rate sau khi step (nếu còn grad)
+        grad_norm = None
+        lr_value = None
+
+        if track_metrics and hasattr(learner, 'opt') and learner.opt is not None:
+            # gradient norm
+            total_norm = 0.0
+            for p in policy.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** 0.5
+            grad_norm = float(total_norm)
+            iteration_metrics['gradient_norms'].append(grad_norm)
+
+        # 7) Lưu loss (nếu learner.step có trả về)
+        if track_metrics:
+            if loss is not None:
+                # loss có thể là tensor, cast sang float
+                if isinstance(loss, torch.Tensor):
+                    loss_val = float(loss.item())
+                else:
+                    loss_val = float(loss)
+                iteration_metrics['losses'].append(loss_val)
+
+        # 8) In debug tổng hợp
+        debug_msg = f"[DEBUG] period={period}, iter={idx}, avg_param_change={avg_delta}"
+        if grad_norm is not None:
+            debug_msg += f", grad_norm={grad_norm}"
+        if lr_value is not None:
+            debug_msg += f", lr={lr_value}"
+        print(debug_msg)
+
     return rews, iteration_metrics
+
 
 
 ######################## Main Functions #######################################
@@ -197,6 +284,8 @@ task_info = np.load(task_info_path)
 tasks = task_info[:, :-1]
 task_ids = task_info[:, -1]
 
+print(tasks)
+print(len(tasks))
 # Validate task_info
 if len(tasks) < args.num_periods:
     print(f'[WARNING] task_info has {len(tasks)} periods but num_periods={args.num_periods}')
@@ -281,27 +370,38 @@ sampler.reset_task(tasks[0])
 
 ### generate the nominal policy model at the first time period
 # Try to initialize from DDQN if available (Transfer Learning)
-if args.ddqn_init_path and os.path.exists(args.ddqn_init_path):
-    print(f'\n[TRANSFER LEARNING] Initializing policy from DDQN: {args.ddqn_init_path}')
-    try:
-        from utils.ddqn_to_policy import convert_ddqn_to_policy
-        policy_init, success = convert_ddqn_to_policy(
-            args.ddqn_init_path, state_dim, action_dim,
-            hidden_sizes=(args.hidden_size,) * args.num_layers,
-            device=device
-        )
-        if success:
-            print('✓ Policy initialized from DDQN (Transfer Learning)')
-        else:
-            print('[WARNING] DDQN conversion failed, using random initialization')
-    except Exception as e:
-        print(f'[WARNING] Failed to load DDQN for transfer learning: {e}')
-        print('  Using random initialization instead')
-        policy_init = NormalMLPPolicy(state_dim, action_dim, 
-        hidden_sizes=(args.hidden_size,) * args.num_layers)
+
+policy_init = NormalMLPPolicy(
+    state_dim,
+    action_dim,
+    hidden_sizes=(args.hidden_size,) * args.num_layers,
+).to(device)
+
+
+# Transferlearning from PPO
+
+if getattr(args, "ppo_init_path", None):
+    ckpt_path = args.ppo_init_path
 else:
-    policy_init = NormalMLPPolicy(state_dim, action_dim, 
-            hidden_sizes=(args.hidden_size,) * args.num_layers)
+    ckpt_path = os.path.join(args.model_path, "ppo_policy_final.pth")
+
+if os.path.exists(ckpt_path):
+    print(f"\n[TRANSFER LEARNING] Loading PPO policy from: {ckpt_path}")
+    try:
+        state_dict = torch.load(ckpt_path, map_location=device)
+        missing, unexpected = policy_init.load_state_dict(state_dict, strict=False)
+
+        print("✓ PPO policy weights loaded (transfer learning).")
+        if missing:
+            print(f"[TRANSFER WARNING] Missing keys: {missing}")
+        if unexpected:
+            print(f"[TRANSFER WARNING] Unexpected keys: {unexpected}")
+    except Exception as e:
+        print(f"[WARNING] Failed to load PPO checkpoint: {e}")
+        print("  Using random initialization instead.")
+else:
+    print(f"\n[TRANSFER LEARNING] No PPO checkpoint found at: {ckpt_path}")
+    print("Using random initialization.")
 
 learner_init = generate_learner(policy_init)
 
@@ -475,7 +575,7 @@ try:
             num_policies += 1
             
         elif task_id <= num_policies:
-            # Luôn dùng policy của đúng cluster (không còn performance-based selection)
+            # dùng policy của cluster 
             policy = policies[task_id-1]
             learner = learners[task_id-1]
             

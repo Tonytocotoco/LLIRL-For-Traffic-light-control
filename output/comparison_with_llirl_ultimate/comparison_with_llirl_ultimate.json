@@ -1,200 +1,133 @@
 {
   "config": {
     "sumo_config": "nets/120p4k/run_120p4k.sumocfg",
-    "num_episodes": 2,
+    "num_episodes": 4,
     "max_steps": 7200,
-    "seed": 27,
+    "seed": 20,
     "device": "cpu",
     "llirl_ultimate_path": "llirl_sumo/saves/120p4k_ultimate_test2",
-    "llirl_selected_cluster": 1
+    "llirl_selected_cluster": -1
   },
   "ddqn": {
-    "model_path": "ddqn_sumo/saves/120p4k/ddqn_model_final.pth",
-    "output_path": "ddqn_sumo/output/120p4k/ddqn_model_final.pth",
-    "training_rewards_available": false,
+    "model_path": "ddqn_sumo/saves/sumo_single_intersection/ddqn_model_final.pth",
+    "output_path": "ddqn_sumo/output/sumo_single_intersection/ddqn_model_final.pth",
     "rewards": [
-      -1623227.0599999998,
-      -1623227.0599999998
+      -1535309.9102790647,
+      -1570877.8481483834,
+      -1571964.039189847,
+      -1570380.838086453
     ],
     "episode_lengths": [
-      720,
-      720
+      661,
+      680,
+      665,
+      682
     ],
     "waiting_times": [
-      21622.897222222222,
-      21622.897222222222
+      44323.79878971256,
+      48051.67794117647,
+      51565.83157894737,
+      44116.626099706744
     ],
     "total_waiting_times": [
-      15568486.0,
-      15568486.0
+      29298031.0,
+      32675141.0,
+      34291278.0,
+      30087539.0
     ],
     "queue_lengths": [
-      264.54583333333335,
-      264.54583333333335
+      477.9122541603631,
+      484.93529411764706,
+      499.66315789473686,
+      504.1011730205279
     ],
     "vehicle_counts": [
-      330.47222222222223,
-      330.47222222222223
+      579.8184568835098,
+      586.2029411764706,
+      595.6646616541353,
+      602.8313782991203
     ],
     "speeds": [
-      4.385269348996886,
-      4.385269348996886
+      1.2023219961583749,
+      1.2846619290849193,
+      1.1616858703274926,
+      1.2282423441128187
     ],
-    "avg_reward": -1623227.0599999998,
-    "avg_waiting_time": 21622.897222222222,
-    "avg_total_waiting_time": 15568486.0,
-    "avg_queue_length": 264.54583333333335,
-    "training_rewards": null,
-    "training_rewards_shape": null
+    "avg_reward": -1562133.158925937,
+    "avg_waiting_time": 47014.483602385786,
+    "avg_total_waiting_time": 31587997.25,
+    "avg_queue_length": 491.65296979831874
   },
   "llirl_ultimate": {
     "model_path": "llirl_sumo/saves/120p4k_ultimate_test2",
     "output_path": "llirl_sumo/output/120p4k_ultimate_test2",
-    "training_rewards_available": true,
     "rewards": [
-      -5119.768866826818,
-      -54894.85949646322
+      -62982.896948594804,
+      -34124.711749480266,
+      -57902.44680134058,
+      -78144.13445880945
     ],
     "episode_lengths": [
-      720,
-      322
+      68,
+      46,
+      67,
+      68
     ],
     "waiting_times": [
-      581.8555555555556,
-      2697.9006211180126
+      15440.558823529413,
+      11812.565217391304,
+      14623.492537313432,
+      19013.529411764706
     ],
     "total_waiting_times": [
-      418936.0,
-      868724.0
+      1049958.0,
+      543378.0,
+      979774.0,
+      1292920.0
     ],
     "queue_lengths": [
-      34.66111111111111,
-      62.50310559006211
+      140.0441176470588,
+      141.2391304347826,
+      128.49253731343285,
+      168.98529411764707
     ],
     "vehicle_counts": [
-      61.43611111111111,
-      88.21739130434783
+      154.89705882352942,
+      153.54347826086956,
+      143.9402985074627,
+      186.38235294117646
     ],
     "speeds": [
-      6.777867023514154,
-      6.962226235354961
+      6.507935584280135,
+      6.694505794716971,
+      6.225526538841988,
+      6.484655161157663
     ],
-    "avg_reward": -30007.31418164502,
-    "avg_waiting_time": 1639.878088336784,
-    "avg_total_waiting_time": 643830.0,
-    "avg_queue_length": 48.58210835058661,
-    "training_rewards": [
-      [
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125,
-        -661.8946533203125
-      ],
-      [
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875,
-        -799.444091796875
-      ],
-      [
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625,
-        -37840.015625
-      ],
-      [
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625,
-        -42204.265625
-      ],
-      [
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875,
-        -356.4715576171875
-      ]
-    ],
-    "training_rewards_shape": [
-      5,
-      10
-    ]
+    "avg_reward": -58288.54748955627,
+    "avg_waiting_time": 15222.536497499714,
+    "avg_total_waiting_time": 966507.5,
+    "avg_queue_length": 144.69026987823034
   },
   "ppo": {
-    "model_path": "ppo_sumo/saves/sumo_single_intersection/ppo_policy_final.pth",
-    "output_path": "ppo_sumo/output/sumo_single_intersection/ppo_policy_final.pth",
-    "training_rewards_available": false,
-    "rewards": [
-      -1428464.9700000007,
-      -1428464.9700000007
-    ],
-    "episode_lengths": [
-      720,
-      720
-    ],
-    "waiting_times": [
-      19013.147222222222,
-      19013.147222222222
-    ],
-    "total_waiting_times": [
-      13689466.0,
-      13689466.0
-    ],
-    "queue_lengths": [
-      218.51944444444445,
-      218.51944444444445
-    ],
-    "vehicle_counts": [
-      268.5861111111111,
-      268.5861111111111
-    ],
-    "speeds": [
-      4.253715330739918,
-      4.253715330739918
-    ],
-    "avg_reward": -1428464.9700000007,
-    "avg_waiting_time": 19013.147222222222,
-    "avg_total_waiting_time": 13689466.0,
-    "avg_queue_length": 218.51944444444445,
-    "training_rewards": null,
-    "training_rewards_shape": null
+    "model_path": null,
+    "output_path": null,
+    "rewards": null,
+    "episode_lengths": null,
+    "waiting_times": null,
+    "total_waiting_times": null,
+    "queue_lengths": null,
+    "vehicle_counts": null,
+    "speeds": null,
+    "avg_reward": null,
+    "avg_waiting_time": null,
+    "avg_total_waiting_time": null,
+    "avg_queue_length": null
   },
   "comparison": {
     "best_model_by_reward": "LLIRL Ultimate",
     "avg_rewards": {
-      "DDQN": -1623227.0599999998,
-      "LLIRL Ultimate": -30007.31418164502,
-      "PPO": -1428464.9700000007
+      "DDQN": -1562133.158925937,
+      "LLIRL Ultimate": -58288.54748955627
     }
   }
 }

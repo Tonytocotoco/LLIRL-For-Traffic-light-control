@@ -24,47 +24,36 @@ if __name__ == "__main__":
     print(f"Output Path: {output_path}")
     print("=" * 80)
     
-    # Step 1: Environment Clustering
-    print("\n" + "=" * 80)
-    print("Step 1: Environment Clustering (ULTIMATE)")
-    print("=" * 80)
+    # # Step 1: Environment Clustering
+    # print("\n" + "=" * 80)
+    # print("Step 1: Environment Clustering (ULTIMATE)")
+    # print("=" * 80)
     
-    clustering_cmd = [
-        sys.executable, "env_clustering.py",
-        "--sumo_config", sumo_config,
-        "--model_path", model_path,
-        "--et_length", "1",
-        "--num_periods", "10",
-        "--device", "cuda",
-        "--seed", "1009",
-        "--batch_size", "16",
-        "--env_num_layers", "3",
-        "--env_hidden_size", "256",
-        "--H", "4",
-        "--max_steps", "7200",
-        "--zeta", "1",
-        "--sigma", "0.25",
-        "--tau1", "0.5",
-        "--tau2", "0.5",
-        "--em_steps", "10"
-    ]
+    # clustering_cmd = [
+    #     sys.executable, "env_clustering.py",
+    #     "--sumo_config", sumo_config,
+    #     "--model_path", model_path,
+    #     "--et_length", "1",
+    #     "--num_periods", "10",
+    #     "--device", "cuda",
+    #     "--seed", "1009",
+    #     "--batch_size", "16",
+    #     "--env_num_layers", "3",
+    #     "--env_hidden_size", "256",
+    #     "--H", "4",
+    #     "--max_steps", "7200",
+    #     "--zeta", "1",
+    #     "--sigma", "0.25",
+    #     "--tau1", "0.5",
+    #     "--tau2", "0.5",
+    #     "--em_steps", "10"
+    # ]
     
-    subprocess.run(clustering_cmd, cwd=llirl_dir, check=True)
+    # subprocess.run(clustering_cmd, cwd=llirl_dir, check=True)
     
     # Step 2: Policy Training
     print("\n" + "=" * 80)
     print("Step 2: Policy Training (ULTIMATE with PPO – CLEAN VERSION)")
-    print("=" * 80)
-    print("Optimizations:")
-    print("  - Algorithm: PPO (ổn định)")
-    print("  - Learning rate: 1e-3")
-    print("  - num_iter: 5 (demo, có thể tăng lên 150)")
-    print("  - batch_size: 16")
-    print("  - Baseline: linear")
-    print("  - Gradient clipping: 0.5")
-    print("  - Learning rate decay: 0.95")
-    print("  - general policy enabled (for new clusters)")
-    print("  - Transfer learning from DDQN enabled")
     print("=" * 80)
     
 
@@ -77,8 +66,8 @@ if __name__ == "__main__":
         "--algorithm", "ppo",
         "--opt", "adam",
         "--lr", "1e-3",
-        "--num_iter", "10",
-        "--num_periods", "5",
+        "--num_iter", "20",
+        "--num_periods", "10",
         "--device", "cuda",
         "--seed", "1009",
         "--batch_size", "16",
@@ -93,9 +82,9 @@ if __name__ == "__main__":
         "--early_stop_patience", "10",
         "--early_stop_threshold", "0.01",
         "--grad_clip", "0.5",
-        "--ddqn_init_path", "ddqn_sumo/output/120p4k/ddqn_model_final.pth"
+        "--ppo_init_path", r"D:\Notebooks\2025_semeter3\AIP\Asignssments_Exams\Code\LLIRL_master_final\LLIRL_For_Traffic_light_control\ppo_sumo\output\models\ppo_policy_3.pth"
     ]
-    
+
     subprocess.run(policy_cmd, cwd=llirl_dir, check=True)
     
     print("\n" + "=" * 80)

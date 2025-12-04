@@ -22,7 +22,7 @@ import gym
 gym.register(
     'SUMO-SingleIntersection-v1',
     entry_point='myrllib.envs.sumo_env:SUMOEnv',
-    max_episode_steps=3600  # 1 giờ = 3600 giây
+    max_episode_steps=7200  # 2 giờ = 7200 giây
 )
 
 from myrllib.algorithms.ddqn import DDQN
@@ -33,18 +33,18 @@ start_time = time.time()
 ######################## Arguments ############################################
 parser = argparse.ArgumentParser()
 parser.add_argument('--sumo_config', type=str, 
-        default='../nets/single-intersection/run_morning_6to10.sumocfg',
+        default='../nets/train-intersection/run_120p4k.sumocfg',
         help='path to SUMO configuration file')
 parser.add_argument('--output', type=str, default='output/sumo_single_intersection',
         help='output folder for saving results')
 parser.add_argument('--model_path', type=str, default='saves/sumo_single_intersection',
         help='folder for saving models')
-parser.add_argument('--num_periods', type=int, default=30,
+parser.add_argument('--num_periods', type=int, default=10,
         help='number of environment changes')
 parser.add_argument('--num_episodes', type=int, default=100,
         help='number of episodes per period')
-parser.add_argument('--max_steps', type=int, default=3600,
-        help='maximum steps per episode (1 giờ = 3600 giây)')
+parser.add_argument('--max_steps', type=int, default=7200,
+        help='maximum steps per episode (2 giờ = 7200 giây)')
 parser.add_argument('--lr', type=float, default=1e-3,
         help='learning rate')
 parser.add_argument('--gamma', type=float, default=0.95,
@@ -145,6 +145,7 @@ for period in range(args.num_periods):
             period_losses.extend(episode_losses)
         
         # Update epsilon
+        print(f"[TRAIN] Period {period+1}/{args.num_periods} | Episode {episode+1}/{args.num_episodes} | Reward: {episode_reward:.2f}")
         ddqn.update_epsilon()
     
     all_rewards[period] = period_rewards
